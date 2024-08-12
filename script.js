@@ -1,10 +1,12 @@
-// Mapbox access token
-mapboxgl.accessToken = 'pk.eyJ1IjoiZGFya3BsYXRlcyIsImEiOiJjbHpxcGhpdGQwd3FuMnFzM3pxMmxoMzNjIn0.qMNONw0hdb__b381URmP1g'; // Mapbox access token
 
-// Initialize the map
+
+// Mapbox access token
+mapboxgl.accessToken = 'pk.eyJ1IjoiZGFya3BsYXRlcyIsImEiOiJjbHpxcGhpdGQwd3FuMnFzM3pxMmxoMzNjIn0.qMNONw0hdb__b381URmP1g'; // Replace with your Mapbox access token
+
+// Initialize the map with satellite streets style for labels and borders
 var map = new mapboxgl.Map({
     container: 'map', // ID of the container where the map will be rendered
-    style: 'mapbox://styles/mapbox/satellite-v9', // Mapbox style for satellite view
+    style: 'mapbox://styles/mapbox/satellite-streets-v11', // Mapbox style with labels and borders
     center: [78.4867, 17.3850], // Starting position [longitude, latitude] for Hyderabad
     zoom: 10, // Initial zoom level
     pitch: 45, // Angle of view (for 3D effect)
@@ -14,10 +16,26 @@ var map = new mapboxgl.Map({
 // Add zoom and rotation controls to the map
 map.addControl(new mapboxgl.NavigationControl());
 
-// Function to fetch trending news from NewsAPI based on coordinates
-async function fetchTrendingNews(lat, lon) {
-    const apiKey = 'ea4c382a07cc403bb7873c1c4368fa4a'; // NewsAPI key
-    const url = `https://newsapi.org/v2/everything?q=${lat},${lon}&apiKey=${apiKey}`;
+// Reverse geocode coordinates to get the nearest city name
+async function getCityName(lat, lon) {
+    const apiKey = 'your_mapbox_geocoding_api_key'; // Replace with your Mapbox Geocoding API key
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${apiKey}&types=place`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        const placeName = data.features[0]?.place_name || 'Unknown Location';
+        return placeName.split(",")[0]; // Return the city name
+    } catch (error) {
+        console.error('Error fetching city name:', error);
+        return 'Unknown Location';
+    }
+}
+
+// Function to fetch trending news from NewsAPI based on city name
+async function fetchTrendingNews(city) {
+    const apiKey = 'ea4c382a07cc403bb7873c1c4368fa4a'; // Replace with your NewsAPI key
+    const url = `https://newsapi.org/v2/everything?q=${city}&apiKey=${apiKey}`;
 
     try {
         const response = await fetch(url);
@@ -32,6 +50,11 @@ async function fetchTrendingNews(lat, lon) {
 function displayNewsArticles(articles) {
     const newsContainer = document.getElementById('news-articles');
     newsContainer.innerHTML = ''; // Clear previous articles
+
+    if (articles.length === 0) {
+        newsContainer.innerHTML = '<p>No news found for this location.</p>';
+        return;
+    }
 
     articles.forEach(article => {
         const articleDiv = document.createElement('div');
@@ -50,16 +73,20 @@ function displayNewsArticles(articles) {
 }
 
 // Event listener for when the user stops interacting with the map (e.g., after zooming or panning)
-map.on('moveend', function() {
+map.on('moveend', async function() {
     // Get the current center coordinates of the map
     const center = map.getCenter();
     const lat = center.lat;
     const lon = center.lng;
 
-    // Fetch news based on the new center coordinates
-    fetchTrendingNews(lat, lon);
+    // Get the city name based on the current center coordinates
+    const city = await getCityName(lat, lon);
+
+    // Fetch news based on the city name
+    fetchTrendingNews(city);
 });
 
 // Initial fetch of news for the starting position
-const initialCenter = map.getCenter();
-fetchTrendingNews(initialCenter.lat, initialCenter.lng);
+getCityName(map.getCenter().lat, map.getCenter().lng).then(city => {
+    fetchTrendingNews(city);
+});
